@@ -1,6 +1,6 @@
 # RetroWatch
 
-![RetroWatch System Architecture](retrowatch_architecture.png)
+![RetroWatch](retrowatch.png)
 
 A nostalgic streaming platform that recreates the golden age of television with AI-matched period commercials.
 
@@ -9,6 +9,7 @@ RetroWatch lets you watch any YouTube video through an authentic CRT TV simulati
 ## Table of Contents
 
 - [Background](#background)
+- [Architecture](#architecture)
 - [Install](#install)
 - [Usage](#usage)
 - [API](#api)
@@ -21,6 +22,10 @@ RetroWatch lets you watch any YouTube video through an authentic CRT TV simulati
 Modern streaming stripped out the communal, serendipitous texture of old TV. RetroWatch is built to bring that back: a 3D CRT television rendered in Three.js, YouTube playback embedded inside it, and an AI pipeline (Vertex AI / Gemini) that picks era-appropriate ads from your own library and splices them in at the right moments.
 
 The project is a full-stack mono-repo: a React 19 SPA talks to a Spring Boot 4 / Java 21 backend, with Supabase (PostgreSQL + object storage) for persistence and Clerk for auth. Google Cloud Tasks drives async ad analysis, and the YouTube Data API v3 provides video metadata for break-point detection.
+
+## Architecture
+
+![RetroWatch System Architecture](retrowatch_architecture.png)
 
 ## Install
 
