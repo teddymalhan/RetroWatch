@@ -22,7 +22,8 @@ function ConfiguredApp() {
   const [supabaseReady, setSupabaseReady] = useState(false);
 
   useEffect(() => {
-    fetch("/config")
+    const apiBase = import.meta.env.VITE_API_URL ?? "";
+    fetch(`${apiBase}/config`)
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Config fetch failed with status ${res.status}`);

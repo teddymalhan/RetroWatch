@@ -7,7 +7,7 @@ import type { paths } from "./types";
  * Used internally by React Query hooks.
  */
 export const fetchClient = createClient<paths>({
-  baseUrl: "",
+  baseUrl: import.meta.env.VITE_API_URL ?? "",
 });
 
 /**
