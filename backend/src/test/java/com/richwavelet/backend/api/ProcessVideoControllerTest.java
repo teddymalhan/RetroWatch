@@ -9,6 +9,7 @@ import com.richwavelet.backend.repository.AdUploadRepository;
 import com.richwavelet.backend.repository.VideoUploadRepository;
 import com.richwavelet.backend.service.JobQueueService;
 import com.richwavelet.backend.service.ProcessingStatusService;
+import com.richwavelet.backend.support.TestAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,7 +18,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -66,10 +66,7 @@ class ProcessVideoControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(processVideoController)
-                .addFilter((request, response, chain) -> {
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    chain.doFilter(request, response);
-                }, "/*")
+                .addFilter(new TestAuthenticationFilter(authentication), "/*")
                 .build();
         objectMapper = new ObjectMapper();
         when(authentication.getPrincipal()).thenReturn(jwt);
@@ -186,7 +183,7 @@ class ProcessVideoControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string("Ad not found or access denied: 999"));
+                .andExpect(content().string("Ad not found or access denied: ad-uuid-999"));
 
         verify(jobQueueService, never()).enqueue(any(), any(), any());
     }

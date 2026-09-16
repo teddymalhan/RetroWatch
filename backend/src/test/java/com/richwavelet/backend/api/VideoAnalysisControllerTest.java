@@ -5,6 +5,7 @@ import com.richwavelet.backend.dto.AdBreakSuggestion;
 import com.richwavelet.backend.dto.AnalyzeVideoRequest;
 import com.richwavelet.backend.dto.VideoAnalysisResult;
 import com.richwavelet.backend.service.YouTubeAnalysisService;
+import com.richwavelet.backend.support.TestAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,7 +14,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -49,10 +49,7 @@ class VideoAnalysisControllerTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         mockMvc = MockMvcBuilders.standaloneSetup(videoAnalysisController)
-                .addFilter((request, response, chain) -> {
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    chain.doFilter(request, response);
-                }, "/*")
+                .addFilter(new TestAuthenticationFilter(authentication), "/*")
                 .build();
         when(authentication.getPrincipal()).thenReturn(jwt);
         when(jwt.getSubject()).thenReturn(userId);

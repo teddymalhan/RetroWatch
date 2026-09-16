@@ -4,6 +4,7 @@ import com.richwavelet.backend.model.UploadStatus;
 import com.richwavelet.backend.model.VideoUpload;
 import com.richwavelet.backend.repository.VideoUploadRepository;
 import com.richwavelet.backend.service.StorageService;
+import com.richwavelet.backend.support.TestAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,8 +15,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -54,10 +53,7 @@ class VideoControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(videoController)
-                .addFilter((request, response, chain) -> {
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    chain.doFilter(request, response);
-                }, "/*")
+                .addFilter(new TestAuthenticationFilter(authentication), "/*")
                 .build();
         when(authentication.getPrincipal()).thenReturn(jwt);
         when(jwt.getSubject()).thenReturn(userId);

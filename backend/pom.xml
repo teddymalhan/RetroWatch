@@ -71,6 +71,14 @@
 		<scope>test</scope>
 	</dependency>
 
+	<!-- In-memory database so BackendApplicationTests can boot the full context
+	     without a PostgreSQL instance (see src/test/resources/application-test.properties) -->
+	<dependency>
+		<groupId>com.h2database</groupId>
+		<artifactId>h2</artifactId>
+		<scope>test</scope>
+	</dependency>
+
 		<!-- Supabase dependencies -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

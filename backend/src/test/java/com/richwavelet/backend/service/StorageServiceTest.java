@@ -40,7 +40,9 @@ class StorageServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(supabaseConfig.getSupabaseUrl()).thenReturn("https://test.supabase.co");
+        // Only the HTTP-backed tests need the URL; keep the stub lenient so the pure
+        // helper tests below are not flagged for an unused stubbing.
+        lenient().when(supabaseConfig.getSupabaseUrl()).thenReturn("https://test.supabase.co");
         storageService = new StorageService(httpClient, supabaseConfig, supabaseService);
     }
 
@@ -125,7 +127,6 @@ class StorageServiceTest {
         when(httpClient.newCall(any(Request.class))).thenReturn(call);
         when(call.execute()).thenReturn(response);
         when(response.isSuccessful()).thenReturn(true);
-        when(response.code()).thenReturn(200);
 
         assertDoesNotThrow(() -> {
             storageService.deleteFromStorage("videos", "user123/video.mp4");
