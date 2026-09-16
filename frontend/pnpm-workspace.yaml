@@ -1,0 +1,13 @@
+# pnpm settings for the frontend package.
+#
+# Since pnpm 10 dependency lifecycle scripts are blocked unless explicitly allowed, and
+# `pnpm install` fails outright with ERR_PNPM_IGNORED_BUILDS when a package with a build
+# script has not been reviewed. pnpm 11+ moved this setting out of package.json into
+# `allowBuilds` here (it replaced onlyBuiltDependencies).
+#
+# Both entries are build-time tooling the bundle needs:
+#   esbuild  - bundles the app through Vite
+#   @clerk/shared - ships a postinstall step used by the Clerk React SDK
+allowBuilds:
+  "@clerk/shared": true
+  esbuild: true

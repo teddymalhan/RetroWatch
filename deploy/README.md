@@ -113,6 +113,17 @@ docker run --rm -v "$VOL":/data -v "$PWD":/backup alpine \
   tar czf /backup/postgres-$(date +%F).tar.gz -C /data .
 ```
 
+## 6. Verify the deployment
+
+```bash
+./deploy/smoke-test.sh
+```
+
+Runs 13 checks against the live stack: the HTTP surface, worker-token enforcement on
+`/api/tasks/**`, the MinIO bucket layout with a write/read/delete round trip, and a
+seeded `queued_job` row watched through dispatcher claim and failure recording.
+Exits non-zero on the first failure.
+
 ## Troubleshooting
 
 **App container restarts with "Failed to determine suitable jdbc url"** — `POSTGRES_*`

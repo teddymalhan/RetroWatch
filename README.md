@@ -205,6 +205,7 @@ mvn spring-boot:run     # run locally
 
 ```bash
 git pull && docker compose up -d --build
+./deploy/smoke-test.sh          # verify the running stack
 ```
 
 Full walkthrough, backups and troubleshooting: [deploy/README.md](deploy/README.md).

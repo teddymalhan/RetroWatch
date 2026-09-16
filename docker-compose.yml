@@ -28,7 +28,8 @@ services:
     # Deliberately not published: only the app needs to reach the database.
 
   minio:
-    image: minio/minio:latest
+    # MinIO publishes to quay.io; the Docker Hub `minio/*` repositories are gone.
+    image: quay.io/minio/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -47,7 +48,7 @@ services:
       retries: 10
 
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     depends_on:
       minio:
         condition: service_healthy
@@ -96,7 +97,16 @@ services:
       WORKER_AUTH_TOKEN: ${WORKER_AUTH_TOKEN:?WORKER_AUTH_TOKEN must be set in .env}
 
       # Auth
+      # VITE_CLERK_PUBLISHABLE_KEY is baked into the bundle at build time AND read at
+      # runtime by ConfigController, which serves it to the browser via GET /config.
+      VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:?VITE_CLERK_PUBLISHABLE_KEY must be set in .env}
       CLERK_WEBHOOK_SECRET: ${CLERK_WEBHOOK_SECRET:-}
+
+      # Supabase is no longer required (storage defaults to S3/MinIO above). Set these
+      # only if you still use the Supabase client in the frontend.
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
 
       # AI (leave GEMINI_BASE_URL empty for Google, or point it at a self-hosted gateway)
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
