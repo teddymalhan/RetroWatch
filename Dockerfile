@@ -19,9 +19,9 @@ RUN mvn package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# Install FFmpeg for video processing
+# Install FFmpeg for video processing and curl for container health checks
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg curl && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=backend-build /app/target/*.jar app.jar

@@ -1,3 +1,10 @@
+# RetroWatch on a local kind cluster (`kind create cluster --config kind-config.yaml`, then `tilt up`).
+#
+# This is the Kubernetes path for local development and for a k3s/k0s VPS. The
+# primary self-hosting path is docker-compose.yml at the repository root; see
+# deploy/README.md.
+#
+# Provide every value through the `app-secrets` Secret (create it from .env).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,38 +28,25 @@ spec:
           env:
             - name: PORT
               value: "8080"
-            - name: VITE_CLERK_PUBLISHABLE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: VITE_CLERK_PUBLISHABLE_KEY
-            - name: CLERK_WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: CLERK_WEBHOOK_SECRET
-            - name: SUPABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: SUPABASE_URL
-            - name: SUPABASE_ANON_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: SUPABASE_ANON_KEY
-            - name: SUPABASE_SERVICE_ROLE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: SUPABASE_SERVICE_ROLE_KEY
-            - name: SUPABASE_DB_URL
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: SUPABASE_DB_URL
+            - name: FRONTEND_URL
+              value: "http://localhost:8080"
+            - name: STORAGE_BACKEND
+              value: "s3"
+            - name: S3_ENDPOINT
+              value: "http://minio:9000"
+            - name: S3_PATH_STYLE_ACCESS
+              value: "true"
+          envFrom:
+            - secretRef:
+                name: app-secrets
           ports:
             - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /api-docs
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
 ---
 apiVersion: v1
 kind: Service
@@ -70,8 +64,26 @@ spec:
       targetPort: 8080
       nodePort: 30080
 ---
+# Fill this in from your .env before applying:
+#
+#   kubectl create secret generic app-secrets \
+#     --from-literal=DATABASE_URL=jdbc:postgresql://postgres:5432/retrowatch \
+#     --from-literal=DATABASE_USERNAME=retrowatch \
+#     --from-literal=DATABASE_PASSWORD=... \
+#     --from-literal=WORKER_AUTH_TOKEN=... \
+#     --from-literal=S3_ACCESS_KEY=... \
+#     --from-literal=S3_SECRET_KEY=... \
+#     --from-literal=SUPABASE_URL=... \
+#     --from-literal=SUPABASE_ANON_KEY=... \
+#     --from-literal=SUPABASE_SERVICE_ROLE_KEY=... \
+#     --from-literal=VITE_CLERK_PUBLISHABLE_KEY=... \
+#     --from-literal=CLERK_WEBHOOK_SECRET=... \
+#     --from-literal=GEMINI_API_KEY=... \
+#     --from-literal=YOUTUBE_API_KEY=... \
+#     --dry-run=client -o yaml | kubectl apply -f -
 apiVersion: v1
 kind: Secret
 metadata:
   name: app-secrets
-stringData:
+type: Opaque
+stringData: {}

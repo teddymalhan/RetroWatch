@@ -1,3 +1,10 @@
+# Local Kubernetes cluster for running RetroWatch on a machine or VPS with kind.
+#
+#   kind create cluster --config kind-config.yaml
+#   tilt up
+#
+# No cloud credentials are mounted: the app talks to the database, object storage and
+# Gemini endpoint configured through environment variables (see k8s/app.yaml).
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: full-stack-spring
@@ -7,9 +14,3 @@ nodes:
       - containerPort: 30080
         hostPort: 8080
         protocol: TCP
-    # Mount gcloud credentials for Vertex AI access
-    # Run `gcloud auth application-default login` first
-    extraMounts:
-      - hostPath: /Users/teddymalhan/.config/gcloud
-        containerPath: /root/.config/gcloud
-        readOnly: true

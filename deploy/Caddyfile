@@ -1,0 +1,28 @@
+# Caddy front door for the self-hosted stack.
+#
+# DOMAIN and ACME_EMAIL come from the environment (see .env). Caddy obtains and renews
+# a Let's Encrypt certificate for DOMAIN automatically once DNS points at this server.
+#
+# Started only with: docker compose --profile tls up -d
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip
+
+	# Spring Boot serves both the built SPA and the API from one origin.
+	reverse_proxy app:8080
+
+	# Uploads can be large; the application enforces the real size limit
+	# (VIDEO_MAX_UPLOAD_SIZE_MB).
+	request_body {
+		max_size 1024MB
+	}
+
+	log {
+		output file /data/access.log
+		format json
+	}
+}

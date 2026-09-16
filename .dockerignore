@@ -1,0 +1,21 @@
+# Build context exclusions — keeps the image build small and fast.
+.git
+.gitignore
+.github
+node_modules
+**/node_modules
+frontend/dist
+backend/target
+**/target
+.idea
+.vscode
+.env
+.env.*
+*.md
+retrowatch.png
+retrowatch_architecture.png
+deploy
+k8s
+supabase
+supabase-migrations
+.pnpm-store
