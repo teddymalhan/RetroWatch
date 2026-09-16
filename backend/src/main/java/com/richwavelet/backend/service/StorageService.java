@@ -4,6 +4,7 @@ import com.richwavelet.backend.config.SupabaseConfig;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,11 +15,19 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.text.Normalizer;
 import java.util.UUID;
 
+/**
+ * {@link ObjectStorage} backed by Supabase Storage's REST API.
+ *
+ * <p>This is the default backend. Because the Supabase Storage API is itself
+ * self-hostable, pointing {@code SUPABASE_URL} at your own Supabase instance keeps
+ * media on your own hardware; {@link S3StorageService} is the alternative when you
+ * would rather run MinIO or another S3-compatible store.
+ */
 @Service
-public class StorageService {
+@ConditionalOnProperty(name = "storage.backend", havingValue = "supabase", matchIfMissing = true)
+public class StorageService implements ObjectStorage {
 
     private static final Logger logger = LoggerFactory.getLogger(StorageService.class);
     private static final int SIGNED_URL_EXPIRY_SECONDS = 3600; // 1 hour
@@ -146,35 +155,17 @@ public class StorageService {
     /**
      * Sanitize a filename for safe storage
      */
+    @Override
     public String sanitizeFileName(String fileName) {
-        if (fileName == null || fileName.isBlank()) {
-            return "unnamed";
-        }
-
-        // Normalize unicode characters
-        String normalized = Normalizer.normalize(fileName, Normalizer.Form.NFD);
-        String noAccents = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
-
-        // Replace unsafe characters
-        String safe = noAccents.replaceAll("[^A-Za-z0-9._-]", "_");
-
-        // Collapse multiple underscores
-        safe = safe.replaceAll("_+", "_");
-
-        // Remove leading/trailing underscores
-        safe = safe.replaceAll("^_+|_+$", "");
-
-        return safe.isEmpty() ? "unnamed" : safe;
+        return StorageNaming.sanitizeFileName(fileName);
     }
 
     /**
      * Get file extension from filename
      */
+    @Override
     public String getFileExtension(String fileName) {
-        if (fileName == null || !fileName.contains(".")) {
-            return "";
-        }
-        return fileName.substring(fileName.lastIndexOf("."));
+        return StorageNaming.getFileExtension(fileName);
     }
 
     /**

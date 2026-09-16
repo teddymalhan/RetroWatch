@@ -28,14 +28,14 @@ public class AdAnalysisService {
     private static final Logger logger = LoggerFactory.getLogger(AdAnalysisService.class);
 
     private final ObjectMapper objectMapper;
-    private final StorageService storageService;
+    private final ObjectStorage storageService;
     private final AdUploadRepository adUploadRepository;
     private final AdMetadataRepository adMetadataRepository;
     private final SupabaseService supabaseService;
     private final GeminiClient geminiClient;
 
     public AdAnalysisService(
-            StorageService storageService,
+            ObjectStorage storageService,
             AdUploadRepository adUploadRepository,
             AdMetadataRepository adMetadataRepository,
             SupabaseService supabaseService,

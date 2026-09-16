@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -28,13 +29,17 @@ public class VideoWorkerController {
 
     private static final Logger logger = LoggerFactory.getLogger(VideoWorkerController.class);
 
+    /** Buckets matching the ones the upload controllers write to. */
+    private static final String VIDEO_BUCKET = "videos";
+    private static final String AD_BUCKET = "ads";
+
     @Value("${worker.auth-token:}")
     private String workerAuthToken;
 
     private final VideoUploadRepository videoUploadRepository;
     private final AdUploadRepository adUploadRepository;
     private final ProcessedVideoRepository processedVideoRepository;
-    private final StorageService storageService;
+    private final ObjectStorage storageService;
     private final GeminiService geminiService;
     private final VideoProcessingService videoProcessingService;
     private final ProcessingStatusService statusService;
@@ -43,7 +48,7 @@ public class VideoWorkerController {
             VideoUploadRepository videoUploadRepository,
             AdUploadRepository adUploadRepository,
             ProcessedVideoRepository processedVideoRepository,
-            StorageService storageService,
+            ObjectStorage storageService,
             GeminiService geminiService,
             VideoProcessingService videoProcessingService,
             ProcessingStatusService statusService) {
@@ -98,14 +103,14 @@ public class VideoWorkerController {
 
             // Download main video
             Path mainVideoPath = workDir.resolve("main-" + UUID.randomUUID() + ".mp4");
-            storageService.downloadFile(mainVideo.getFileUrl(), mainVideoPath);
+            downloadUpload(VIDEO_BUCKET, mainVideo.getStoragePath(), mainVideo.getFileUrl(), mainVideoPath);
             logger.info("Downloaded main video to: {}", mainVideoPath);
 
             // Download ads
             List<Path> adPaths = new ArrayList<>();
             for (AdUpload ad : ads) {
                 Path adPath = workDir.resolve("ad-" + ad.getId() + "-" + UUID.randomUUID() + ".mp4");
-                storageService.downloadFile(ad.getFileUrl(), adPath);
+                downloadUpload(AD_BUCKET, ad.getStoragePath(), ad.getFileUrl(), adPath);
                 adPaths.add(adPath);
                 logger.info("Downloaded ad {} to: {}", ad.getId(), adPath);
             }
@@ -207,6 +212,23 @@ public class VideoWorkerController {
             if (workDir != null) {
                 videoProcessingService.cleanupWorkDir(workDir);
             }
+        }
+    }
+
+    /**
+     * Fetch an uploaded object to local disk.
+     *
+     * <p>Uses the backend-agnostic storage path when the row has one, so private buckets
+     * work on every backend. Rows written before {@code storage_path} existed only carry a
+     * URL, which we fetch directly.
+     */
+    private void downloadUpload(String bucket, String storagePath, String fileUrl, Path destination)
+            throws IOException {
+        if (storagePath != null && !storagePath.isBlank()) {
+            storageService.downloadFromStorage(bucket, storagePath, destination);
+        } else {
+            logger.warn("No storage path for {} — falling back to direct URL download", destination.getFileName());
+            storageService.downloadFile(fileUrl, destination);
         }
     }
 

@@ -99,6 +99,14 @@
 			<artifactId>jackson-databind</artifactId>
 		</dependency>
 
+		<!-- S3-compatible object storage (MinIO on your own VPS), used when
+		     storage.backend=s3. Spring Boot's BOM does not manage AWS SDK v2, so pin it. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.34.0</version>
+		</dependency>
+
 		<!-- OpenAPI documentation -->
 		<dependency>
 			<groupId>org.springdoc</groupId>

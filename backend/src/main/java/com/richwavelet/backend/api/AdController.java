@@ -3,7 +3,7 @@ package com.richwavelet.backend.api;
 import com.richwavelet.backend.model.AdUpload;
 import com.richwavelet.backend.repository.AdUploadRepository;
 import com.richwavelet.backend.service.AdAnalysisService;
-import com.richwavelet.backend.service.StorageService;
+import com.richwavelet.backend.service.ObjectStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -33,12 +33,12 @@ public class AdController {
     private static final long MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB for ads
 
     private final AdUploadRepository adUploadRepository;
-    private final StorageService storageService;
+    private final ObjectStorage storageService;
     private final AdAnalysisService adAnalysisService;
 
     public AdController(
             AdUploadRepository adUploadRepository,
-            StorageService storageService,
+            ObjectStorage storageService,
             AdAnalysisService adAnalysisService) {
         this.adUploadRepository = adUploadRepository;
         this.storageService = storageService;

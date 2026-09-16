@@ -3,7 +3,7 @@ package com.richwavelet.backend.api;
 import com.richwavelet.backend.model.UploadStatus;
 import com.richwavelet.backend.model.VideoUpload;
 import com.richwavelet.backend.repository.VideoUploadRepository;
-import com.richwavelet.backend.service.StorageService;
+import com.richwavelet.backend.service.ObjectStorage;
 import com.richwavelet.backend.support.TestAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ class VideoControllerTest {
     private VideoUploadRepository videoUploadRepository;
 
     @Mock
-    private StorageService storageService;
+    private ObjectStorage storageService;
 
     @Mock
     private Authentication authentication;

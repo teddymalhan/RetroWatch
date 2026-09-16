@@ -3,7 +3,7 @@ package com.richwavelet.backend.api;
 import com.richwavelet.backend.model.VideoUpload;
 import com.richwavelet.backend.model.UploadStatus;
 import com.richwavelet.backend.repository.VideoUploadRepository;
-import com.richwavelet.backend.service.StorageService;
+import com.richwavelet.backend.service.ObjectStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -33,9 +33,9 @@ public class VideoController {
     private static final long MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
     private final VideoUploadRepository videoUploadRepository;
-    private final StorageService storageService;
+    private final ObjectStorage storageService;
 
-    public VideoController(VideoUploadRepository videoUploadRepository, StorageService storageService) {
+    public VideoController(VideoUploadRepository videoUploadRepository, ObjectStorage storageService) {
         this.videoUploadRepository = videoUploadRepository;
         this.storageService = storageService;
     }
