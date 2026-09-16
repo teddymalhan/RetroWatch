@@ -2,10 +2,7 @@ package com.richwavelet.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.cloud.vertexai.VertexAI;
-import com.google.cloud.vertexai.api.*;
-import com.google.cloud.vertexai.generativeai.GenerativeModel;
-import com.google.cloud.vertexai.generativeai.ResponseHandler;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.richwavelet.backend.dto.AdBreakSuggestion;
 import com.richwavelet.backend.dto.VideoAnalysisResult;
 import com.richwavelet.backend.dto.YouTubeMetadata;
@@ -36,23 +33,16 @@ public class YouTubeAnalysisService {
     @Value("${youtube.api.key}")
     private String youtubeApiKey;
 
-    @Value("${gcp.project-id}")
-    private String projectId;
-
-    @Value("${gcp.location:us-central1}")
-    private String location;
-
-    @Value("${gemini.model:gemini-2.0-flash-001}")
-    private String geminiModel;
-
     private final VideoAnalysisRepository videoAnalysisRepository;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final GeminiClient geminiClient;
 
-    public YouTubeAnalysisService(VideoAnalysisRepository videoAnalysisRepository) {
+    public YouTubeAnalysisService(VideoAnalysisRepository videoAnalysisRepository, GeminiClient geminiClient) {
         this.videoAnalysisRepository = videoAnalysisRepository;
         this.objectMapper = new ObjectMapper();
         this.restTemplate = new RestTemplate();
+        this.geminiClient = geminiClient;
     }
 
     /**
@@ -200,69 +190,34 @@ public class YouTubeAnalysisService {
                 metadata.durationSeconds()
         );
 
-        try (VertexAI vertexAI = new VertexAI(projectId, location)) {
-            GenerationConfig generationConfig = GenerationConfig.newBuilder()
-                    .setResponseMimeType("application/json")
-                    .setResponseSchema(buildVideoAnalysisSchema())
-                    .build();
-
-            GenerativeModel model = new GenerativeModel.Builder()
-                    .setModelName(geminiModel)
-                    .setVertexAi(vertexAI)
-                    .setGenerationConfig(generationConfig)
-                    .build();
-
-            Content content = Content.newBuilder()
-                    .setRole("user")
-                    .addParts(Part.newBuilder().setText(prompt).build())
-                    .build();
-
-            GenerateContentResponse response = model.generateContent(content);
-            String responseText = ResponseHandler.getText(response);
-
-            return parseGeminiResponse(metadata, responseText);
+        String responseText;
+        try {
+            responseText = geminiClient.generateJson(prompt, buildVideoAnalysisSchema());
         } catch (Exception e) {
             logger.error("Gemini analysis failed: {}", e.getMessage(), e);
             throw new IOException("Gemini analysis failed: " + e.getMessage(), e);
         }
+
+        return parseGeminiResponse(metadata, responseText);
     }
 
     /**
-     * Build Vertex AI schema for video analysis response
+     * Build the response schema for video analysis
      */
-    private Schema buildVideoAnalysisSchema() {
-        return Schema.newBuilder()
-                .setType(Type.OBJECT)
-                .putProperties("categories", Schema.newBuilder()
-                        .setType(Type.ARRAY)
-                        .setItems(Schema.newBuilder().setType(Type.STRING).build())
-                        .build())
-                .putProperties("topics", Schema.newBuilder()
-                        .setType(Type.ARRAY)
-                        .setItems(Schema.newBuilder().setType(Type.STRING).build())
-                        .build())
-                .putProperties("sentiment", Schema.newBuilder().setType(Type.STRING).build())
-                .putProperties("adBreakSuggestions", Schema.newBuilder()
-                        .setType(Type.ARRAY)
-                        .setItems(Schema.newBuilder()
-                                .setType(Type.OBJECT)
-                                .putProperties("timestamp", Schema.newBuilder().setType(Type.INTEGER).build())
-                                .putProperties("priority", Schema.newBuilder().setType(Type.INTEGER).build())
-                                .putProperties("reason", Schema.newBuilder().setType(Type.STRING).build())
-                                .putProperties("suggestedAdCategories", Schema.newBuilder()
-                                        .setType(Type.ARRAY)
-                                        .setItems(Schema.newBuilder().setType(Type.STRING).build())
-                                        .build())
-                                .addRequired("timestamp")
-                                .addRequired("priority")
-                                .addRequired("reason")
-                                .addRequired("suggestedAdCategories")
-                                .build())
-                        .build())
-                .addRequired("categories")
-                .addRequired("topics")
-                .addRequired("sentiment")
-                .addRequired("adBreakSuggestions")
+    private ObjectNode buildVideoAnalysisSchema() {
+        return GeminiSchemas.object()
+                .prop("categories", GeminiSchemas.stringArray())
+                .prop("topics", GeminiSchemas.stringArray())
+                .prop("sentiment", GeminiSchemas.string())
+                .prop("adBreakSuggestions", GeminiSchemas.arrayOf(
+                        GeminiSchemas.object()
+                                .prop("timestamp", GeminiSchemas.integer())
+                                .prop("priority", GeminiSchemas.integer())
+                                .prop("reason", GeminiSchemas.string())
+                                .prop("suggestedAdCategories", GeminiSchemas.stringArray())
+                                .require("timestamp", "priority", "reason", "suggestedAdCategories")
+                                .build()))
+                .require("categories", "topics", "sentiment", "adBreakSuggestions")
                 .build();
     }
 
@@ -368,7 +323,7 @@ public class YouTubeAnalysisService {
                 entity.getYoutubeUrl(),
                 entity.getTitle(),
                 entity.getDescription(),
-                entity.getDurationSeconds(),
+                entity.getDurationSeconds() != null ? entity.getDurationSeconds() : 0,
                 entity.getCategories() != null ? entity.getCategories() : List.of(),
                 entity.getTopics() != null ? entity.getTopics() : List.of(),
                 entity.getSentiment(),

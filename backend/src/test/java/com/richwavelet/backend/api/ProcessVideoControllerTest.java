@@ -7,7 +7,7 @@ import com.richwavelet.backend.model.ShaderStyle;
 import com.richwavelet.backend.model.VideoUpload;
 import com.richwavelet.backend.repository.AdUploadRepository;
 import com.richwavelet.backend.repository.VideoUploadRepository;
-import com.richwavelet.backend.service.CloudTasksService;
+import com.richwavelet.backend.service.JobQueueService;
 import com.richwavelet.backend.service.ProcessingStatusService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ProcessVideoControllerTest {
 
     @Mock
-    private CloudTasksService cloudTasksService;
+    private JobQueueService jobQueueService;
 
     @Mock
     private ProcessingStatusService statusService;
@@ -85,8 +85,7 @@ class ProcessVideoControllerTest {
         ProcessVideoRequest request = new ProcessVideoRequest(1L, null, ShaderStyle.CRT);
 
         when(videoUploadRepository.findById(1L)).thenReturn(Optional.of(video));
-        when(cloudTasksService.hasExistingTask(userId)).thenReturn(false);
-        when(cloudTasksService.createProcessingTask(any(), anyString(), anyString())).thenReturn("task-123");
+        when(jobQueueService.hasExistingTask(userId)).thenReturn(false);
 
         mockMvc.perform(post("/api/protected/process-video")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -96,7 +95,7 @@ class ProcessVideoControllerTest {
                 .andExpect(jsonPath("$.message").value("Video queued for processing"));
 
         verify(statusService).createStatus(anyString(), eq(userId), anyString());
-        verify(cloudTasksService).createProcessingTask(any(), eq(userId), anyString());
+        verify(jobQueueService).enqueue(any(), eq(userId), anyString());
     }
 
     @Test
@@ -111,7 +110,7 @@ class ProcessVideoControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Video not found"));
 
-        verify(cloudTasksService, never()).createProcessingTask(any(), any(), any());
+        verify(jobQueueService, never()).enqueue(any(), any(), any());
     }
 
     @Test
@@ -130,7 +129,7 @@ class ProcessVideoControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(content().string("Access denied"));
 
-        verify(cloudTasksService, never()).createProcessingTask(any(), any(), any());
+        verify(jobQueueService, never()).enqueue(any(), any(), any());
     }
 
     @Test
@@ -156,8 +155,7 @@ class ProcessVideoControllerTest {
         when(videoUploadRepository.findById(1L)).thenReturn(Optional.of(video));
         when(adUploadRepository.findById("ad-uuid-1")).thenReturn(Optional.of(ad1));
         when(adUploadRepository.findById("ad-uuid-2")).thenReturn(Optional.of(ad2));
-        when(cloudTasksService.hasExistingTask(userId)).thenReturn(false);
-        when(cloudTasksService.createProcessingTask(any(), anyString(), anyString())).thenReturn("task-123");
+        when(jobQueueService.hasExistingTask(userId)).thenReturn(false);
 
         mockMvc.perform(post("/api/protected/process-video")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -166,7 +164,7 @@ class ProcessVideoControllerTest {
 
         verify(adUploadRepository).findById("ad-uuid-1");
         verify(adUploadRepository).findById("ad-uuid-2");
-        verify(cloudTasksService).createProcessingTask(any(), eq(userId), anyString());
+        verify(jobQueueService).enqueue(any(), eq(userId), anyString());
     }
 
     @Test
@@ -190,7 +188,7 @@ class ProcessVideoControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Ad not found or access denied: 999"));
 
-        verify(cloudTasksService, never()).createProcessingTask(any(), any(), any());
+        verify(jobQueueService, never()).enqueue(any(), any(), any());
     }
 
     @Test
@@ -202,7 +200,7 @@ class ProcessVideoControllerTest {
         ProcessVideoRequest request = new ProcessVideoRequest(1L, null, ShaderStyle.CRT);
 
         when(videoUploadRepository.findById(1L)).thenReturn(Optional.of(video));
-        when(cloudTasksService.hasExistingTask(userId)).thenReturn(true);
+        when(jobQueueService.hasExistingTask(userId)).thenReturn(true);
 
         mockMvc.perform(post("/api/protected/process-video")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -211,7 +209,7 @@ class ProcessVideoControllerTest {
                 .andExpect(jsonPath("$.status").value("CONFLICT"))
                 .andExpect(jsonPath("$.message").value("You already have a video being processed. Please wait."));
 
-        verify(cloudTasksService, never()).createProcessingTask(any(), any(), any());
+        verify(jobQueueService, never()).enqueue(any(), any(), any());
     }
 
     @Test

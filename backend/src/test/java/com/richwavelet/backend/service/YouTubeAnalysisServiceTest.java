@@ -8,11 +8,11 @@ import com.richwavelet.backend.repository.VideoAnalysisRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Optional;
@@ -20,16 +20,31 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class YouTubeAnalysisServiceTest {
 
+    private static final String YOUTUBE_METADATA_RESPONSE = """
+            {"items":[{"snippet":{"title":"Test Video","description":"Test Description",\
+            "categoryId":"10","tags":["retro","tv"]},"contentDetails":{"duration":"PT3M33S"}}]}
+            """;
+
+    private static final String GEMINI_ANALYSIS_RESPONSE = """
+            {"categories":["entertainment"],"topics":["retro tv"],"sentiment":"positive",\
+            "adBreakSuggestions":[{"timestamp":120,"priority":8,"reason":"Natural break",\
+            "suggestedAdCategories":["food"]}]}
+            """;
+
     @Mock
     private VideoAnalysisRepository videoAnalysisRepository;
 
     @Mock
-    private GeminiService geminiService;
+    private GeminiClient geminiClient;
+
+    @Mock
+    private RestTemplate restTemplate;
 
     @InjectMocks
     private YouTubeAnalysisService youTubeAnalysisService;
@@ -41,6 +56,7 @@ class YouTubeAnalysisServiceTest {
         objectMapper = new ObjectMapper();
         ReflectionTestUtils.setField(youTubeAnalysisService, "youtubeApiKey", "test-api-key");
         ReflectionTestUtils.setField(youTubeAnalysisService, "objectMapper", objectMapper);
+        ReflectionTestUtils.setField(youTubeAnalysisService, "restTemplate", restTemplate);
     }
 
     @Test
@@ -85,11 +101,21 @@ class YouTubeAnalysisServiceTest {
     void testFetchMetadata_Success() throws Exception {
         String videoId = "dQw4w9WgXcQ";
 
-        // Mock will be implemented when we create the actual service
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(YOUTUBE_METADATA_RESPONSE);
+
         YouTubeMetadata metadata = youTubeAnalysisService.fetchMetadata(videoId);
 
         assertNotNull(metadata);
         assertEquals(videoId, metadata.videoId());
+        assertEquals("Test Video", metadata.title());
+        assertEquals(213, metadata.durationSeconds());
+    }
+
+    @Test
+    void testFetchMetadata_EmptyItemsFails() {
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn("{\"items\":[]}");
+
+        assertThrows(java.io.IOException.class, () -> youTubeAnalysisService.fetchMetadata("dQw4w9WgXcQ"));
     }
 
     @Test
@@ -107,11 +133,16 @@ class YouTubeAnalysisServiceTest {
             return va;
         });
 
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(YOUTUBE_METADATA_RESPONSE);
+        when(geminiClient.generateJson(anyString(), any())).thenReturn(GEMINI_ANALYSIS_RESPONSE);
+
         VideoAnalysisResult result = youTubeAnalysisService.analyze(youtubeUrl);
 
         assertNotNull(result);
         assertEquals(videoId, result.videoId());
         assertEquals(youtubeUrl, result.youtubeUrl());
+        assertEquals(List.of("entertainment"), result.categories());
+        assertEquals(1, result.adBreakSuggestions().size());
 
         // Verify that we saved the analysis
         verify(videoAnalysisRepository, times(1)).save(any(VideoAnalysis.class));

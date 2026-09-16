@@ -98,33 +98,8 @@
 			<version>2.8.3</version>
 		</dependency>
 
-		<!-- Google Cloud Tasks -->
-		<dependency>
-			<groupId>com.google.cloud</groupId>
-			<artifactId>google-cloud-tasks</artifactId>
-			<version>2.37.0</version>
-		</dependency>
-
-		<!-- Google Auth for OIDC verification -->
-		<dependency>
-			<groupId>com.google.api-client</groupId>
-			<artifactId>google-api-client</artifactId>
-			<version>2.2.0</version>
-		</dependency>
-
-		<!-- Google HTTP Client -->
-		<dependency>
-			<groupId>com.google.http-client</groupId>
-			<artifactId>google-http-client-gson</artifactId>
-			<version>1.44.1</version>
-		</dependency>
-
-		<!-- Google Cloud Vertex AI (for Gemini) -->
-		<dependency>
-			<groupId>com.google.cloud</groupId>
-			<artifactId>google-cloud-vertexai</artifactId>
-			<version>1.18.0</version>
-		</dependency>
+		<!-- Google API surface fully removed: the queue is in PostgreSQL and Gemini is
+		     called over plain HTTPS by com.richwavelet.backend.service.GeminiClient. -->
 	</dependencies>
 
 	<build>

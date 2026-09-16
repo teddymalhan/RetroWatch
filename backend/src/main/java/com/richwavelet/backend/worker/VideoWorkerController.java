@@ -1,9 +1,5 @@
 package com.richwavelet.backend.worker;
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
 import com.richwavelet.backend.dto.AdInsertionPoint;
 import com.richwavelet.backend.dto.GeminiAnalysisResult;
 import com.richwavelet.backend.dto.WorkerPayload;
@@ -19,9 +15,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -32,11 +28,8 @@ public class VideoWorkerController {
 
     private static final Logger logger = LoggerFactory.getLogger(VideoWorkerController.class);
 
-    @Value("${gcp.worker-base-url}")
-    private String workerBaseUrl;
-
-    @Value("${gcp.service-account}")
-    private String serviceAccount;
+    @Value("${worker.auth-token:}")
+    private String workerAuthToken;
 
     private final VideoUploadRepository videoUploadRepository;
     private final AdUploadRepository adUploadRepository;
@@ -65,6 +58,7 @@ public class VideoWorkerController {
 
     @PostMapping("/process-video-worker")
     public ResponseEntity<Map<String, Object>> processVideo(
+            @RequestHeader(name = "X-Worker-Token", required = false) String tokenHeader,
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestBody WorkerPayload payload) {
 
@@ -74,9 +68,9 @@ public class VideoWorkerController {
         logger.info("[worker] Processing video - jobId: {}, userId: {}, videoId: {}, style: {}",
                 jobId, userId, payload.videoId(), payload.shaderStyle());
 
-        // Verify OIDC token from Cloud Tasks
-        if (!verifyOidcToken(authHeader)) {
-            logger.error("OIDC token verification failed for job: {}", jobId);
+        // Verify the shared worker token issued by the dispatcher
+        if (!verifyWorkerToken(tokenHeader != null ? tokenHeader : authHeader)) {
+            logger.error("Worker token verification failed for job: {}", jobId);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
@@ -120,13 +114,13 @@ public class VideoWorkerController {
             statusService.updateStatus(jobId, userId, ProcessingStage.ANALYZING,
                     "Uploading video to Gemini for analysis...", 15);
 
-            // Upload to Gemini and analyze
-            String geminiFileUri = geminiService.uploadVideo(mainVideoPath, mainVideo.getFileName());
+            // Encode to Gemini and analyze
+            String geminiVideoData = geminiService.encodeVideo(mainVideoPath, mainVideo.getFileName());
 
             statusService.updateStatus(jobId, userId, ProcessingStage.ANALYZING,
                     "Analyzing video for scene breaks and ad insertion points...", 25);
 
-            GeminiAnalysisResult analysis = geminiService.analyzeVideo(geminiFileUri, style);
+            GeminiAnalysisResult analysis = geminiService.analyzeVideo(geminiVideoData, style);
             logger.info("Gemini analysis complete: {} scene breaks, {} ad insertion points",
                     analysis.sceneBreaks().size(), analysis.adInsertionPoints().size());
 
@@ -217,46 +211,37 @@ public class VideoWorkerController {
     }
 
     /**
-     * Verify the OIDC token from Cloud Tasks
+     * Verify the shared worker token sent by {@link JobDispatcher}.
+     *
+     * <p>The value comes from {@code worker.auth-token}. When it is unset the endpoint falls
+     * back to unauthenticated access — intended only for local development, and logged loudly
+     * so it is obvious in the startup output of a misconfigured deployment.
      */
-    private boolean verifyOidcToken(String authHeader) {
-        // Allow requests without auth in local development
-        if (workerBaseUrl == null || workerBaseUrl.isEmpty()) {
-            logger.warn("Worker base URL not configured, skipping OIDC verification (development mode)");
+    private boolean verifyWorkerToken(String presented) {
+        if (workerAuthToken == null || workerAuthToken.isBlank()) {
+            logger.warn("worker.auth-token is not configured, skipping worker authentication (development mode)");
             return true;
         }
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            logger.error("Missing or invalid Authorization header");
+        if (presented == null || presented.isBlank()) {
+            logger.error("Missing worker token");
             return false;
         }
 
-        try {
-            String jwt = authHeader.substring(7);
-            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier
-                    .Builder(new NetHttpTransport(), new GsonFactory())
-                    .setAudience(Collections.singletonList(workerBaseUrl))
-                    .build();
+        String token = presented.startsWith("Bearer ") ? presented.substring(7) : presented;
 
-            GoogleIdToken idToken = verifier.verify(jwt);
-            if (idToken == null) {
-                logger.error("Invalid ID token");
-                return false;
-            }
+        // Constant-time comparison so the token cannot be recovered through timing.
+        boolean matches = MessageDigest.isEqual(
+                token.getBytes(StandardCharsets.UTF_8),
+                workerAuthToken.getBytes(StandardCharsets.UTF_8));
 
-            String tokenEmail = idToken.getPayload().getEmail();
-            if (tokenEmail == null || !tokenEmail.equals(serviceAccount)) {
-                logger.error("Unexpected OIDC email claim: {}", tokenEmail);
-                return false;
-            }
-
-            logger.info("OIDC token verified successfully for: {}", tokenEmail);
-            return true;
-
-        } catch (GeneralSecurityException | IOException e) {
-            logger.error("Error verifying OIDC token: {}", e.getMessage());
+        if (!matches) {
+            logger.error("Invalid worker token");
             return false;
         }
+
+        logger.debug("Worker token verified");
+        return true;
     }
 
     /**

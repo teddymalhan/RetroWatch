@@ -6,7 +6,7 @@ import com.richwavelet.backend.model.ProcessingStatus;
 import com.richwavelet.backend.model.VideoUpload;
 import com.richwavelet.backend.repository.AdUploadRepository;
 import com.richwavelet.backend.repository.VideoUploadRepository;
-import com.richwavelet.backend.service.CloudTasksService;
+import com.richwavelet.backend.service.JobQueueService;
 import com.richwavelet.backend.service.ProcessingStatusService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,17 +26,17 @@ public class ProcessVideoController {
 
     private static final Logger logger = LoggerFactory.getLogger(ProcessVideoController.class);
 
-    private final CloudTasksService cloudTasksService;
+    private final JobQueueService jobQueueService;
     private final ProcessingStatusService statusService;
     private final VideoUploadRepository videoUploadRepository;
     private final AdUploadRepository adUploadRepository;
 
     public ProcessVideoController(
-            CloudTasksService cloudTasksService,
+            JobQueueService jobQueueService,
             ProcessingStatusService statusService,
             VideoUploadRepository videoUploadRepository,
             AdUploadRepository adUploadRepository) {
-        this.cloudTasksService = cloudTasksService;
+        this.jobQueueService = jobQueueService;
         this.statusService = statusService;
         this.videoUploadRepository = videoUploadRepository;
         this.adUploadRepository = adUploadRepository;
@@ -71,8 +71,8 @@ public class ProcessVideoController {
             }
         }
 
-        // Check for existing queued task
-        if (cloudTasksService.hasExistingTask(userId)) {
+        // Check for an existing queued or running job
+        if (jobQueueService.hasExistingTask(userId)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(new ProcessVideoResponse(
                             null,
@@ -88,10 +88,10 @@ public class ProcessVideoController {
             // Create initial status
             statusService.createStatus(jobId, userId, "Video queued for processing...");
 
-            // Create Cloud Task
-            String taskName = cloudTasksService.createProcessingTask(request, userId, jobId);
+            // Persist the job; the in-process dispatcher picks it up and calls the worker
+            jobQueueService.enqueue(request, userId, jobId);
 
-            logger.info("Created processing task: {} for job: {}", taskName, jobId);
+            logger.info("Enqueued processing job: {} for user: {}", jobId, userId);
 
             return ResponseEntity.accepted().body(new ProcessVideoResponse(
                     jobId,
@@ -100,7 +100,7 @@ public class ProcessVideoController {
             ));
 
         } catch (Exception e) {
-            logger.error("Error creating processing task: {}", e.getMessage(), e);
+            logger.error("Error queuing video: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ProcessVideoResponse(
                             null,

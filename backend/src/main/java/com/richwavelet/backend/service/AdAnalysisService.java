@@ -2,11 +2,7 @@ package com.richwavelet.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.cloud.vertexai.VertexAI;
-import com.google.cloud.vertexai.api.*;
-import com.google.cloud.vertexai.generativeai.GenerativeModel;
-import com.google.cloud.vertexai.generativeai.ResponseHandler;
-import com.google.protobuf.ByteString;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.richwavelet.backend.dto.AdAnalysisResult;
 import com.richwavelet.backend.model.AdMetadata;
 import com.richwavelet.backend.model.AdUpload;
@@ -14,7 +10,6 @@ import com.richwavelet.backend.repository.AdMetadataRepository;
 import com.richwavelet.backend.repository.AdUploadRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -32,31 +27,25 @@ public class AdAnalysisService {
 
     private static final Logger logger = LoggerFactory.getLogger(AdAnalysisService.class);
 
-    @Value("${gcp.project-id}")
-    private String projectId;
-
-    @Value("${gcp.location:us-central1}")
-    private String location;
-
-    @Value("${gemini.model:gemini-2.0-flash-001}")
-    private String geminiModel;
-
     private final ObjectMapper objectMapper;
     private final StorageService storageService;
     private final AdUploadRepository adUploadRepository;
     private final AdMetadataRepository adMetadataRepository;
     private final SupabaseService supabaseService;
+    private final GeminiClient geminiClient;
 
     public AdAnalysisService(
             StorageService storageService,
             AdUploadRepository adUploadRepository,
             AdMetadataRepository adMetadataRepository,
-            SupabaseService supabaseService) {
+            SupabaseService supabaseService,
+            GeminiClient geminiClient) {
         this.objectMapper = new ObjectMapper();
         this.storageService = storageService;
         this.adUploadRepository = adUploadRepository;
         this.adMetadataRepository = adMetadataRepository;
         this.supabaseService = supabaseService;
+        this.geminiClient = geminiClient;
     }
 
     /**
@@ -128,85 +117,47 @@ public class AdAnalysisService {
     }
 
     /**
-     * Read video and return bytes for Vertex AI Gemini inline usage
+     * Read video bytes for inline Gemini usage
      */
     private byte[] readVideoForGemini(Path videoPath, String displayName) throws IOException {
-        logger.info("Reading ad video for Vertex AI Gemini: {}", displayName);
+        logger.info("Reading ad video for Gemini: {}", displayName);
         byte[] videoBytes = Files.readAllBytes(videoPath);
-        logger.info("Ad video prepared for Vertex AI: {} ({} bytes)", displayName, videoBytes.length);
+        logger.info("Ad video prepared for Gemini: {} ({} bytes)", displayName, videoBytes.length);
         return videoBytes;
     }
 
     /**
-     * Analyze ad video with Vertex AI Gemini
+     * Analyze ad video with Gemini
      */
     private AdAnalysisResult analyzeWithGemini(byte[] videoBytes) throws IOException {
-        logger.info("Analyzing ad with Vertex AI Gemini");
+        logger.info("Analyzing ad with Gemini");
 
         String prompt = buildAdAnalysisPrompt();
+        String responseText;
 
-        try (VertexAI vertexAI = new VertexAI(projectId, location)) {
-            // Build generation config with JSON response
-            GenerationConfig generationConfig = GenerationConfig.newBuilder()
-                    .setResponseMimeType("application/json")
-                    .setResponseSchema(buildAdAnalysisSchema())
-                    .build();
-
-            GenerativeModel model = new GenerativeModel.Builder()
-                    .setModelName(geminiModel)
-                    .setVertexAi(vertexAI)
-                    .setGenerationConfig(generationConfig)
-                    .build();
-
-            // Build content with video and prompt
-            Content content = Content.newBuilder()
-                    .setRole("user")
-                    .addParts(Part.newBuilder()
-                            .setInlineData(Blob.newBuilder()
-                                    .setMimeType("video/mp4")
-                                    .setData(ByteString.copyFrom(videoBytes))
-                                    .build())
-                            .build())
-                    .addParts(Part.newBuilder()
-                            .setText(prompt)
-                            .build())
-                    .build();
-
-            GenerateContentResponse response = model.generateContent(content);
-            String responseText = ResponseHandler.getText(response);
-
-            return parseAdAnalysisResponse(responseText);
+        try {
+            responseText = geminiClient.generateJson(prompt, videoBytes, "video/mp4", buildAdAnalysisSchema());
         } catch (Exception e) {
-            logger.error("Vertex AI Gemini ad analysis failed: {}", e.getMessage(), e);
+            logger.error("Gemini ad analysis failed: {}", e.getMessage(), e);
             throw new IOException("Gemini ad analysis failed: " + e.getMessage(), e);
         }
+
+        return parseAdAnalysisResponse(responseText);
     }
 
     /**
-     * Build the response schema for Vertex AI structured output
+     * Build the response schema for Gemini structured output
      */
-    private Schema buildAdAnalysisSchema() {
-        return Schema.newBuilder()
-                .setType(Type.OBJECT)
-                .putProperties("categories", Schema.newBuilder()
-                        .setType(Type.ARRAY)
-                        .setItems(Schema.newBuilder().setType(Type.STRING).build())
-                        .build())
-                .putProperties("tone", Schema.newBuilder().setType(Type.STRING).build())
-                .putProperties("eraStyle", Schema.newBuilder().setType(Type.STRING).build())
-                .putProperties("keywords", Schema.newBuilder()
-                        .setType(Type.ARRAY)
-                        .setItems(Schema.newBuilder().setType(Type.STRING).build())
-                        .build())
-                .putProperties("transcript", Schema.newBuilder().setType(Type.STRING).build())
-                .putProperties("brandName", Schema.newBuilder().setType(Type.STRING).build())
-                .putProperties("energyLevel", Schema.newBuilder().setType(Type.INTEGER).build())
-                .addRequired("categories")
-                .addRequired("tone")
-                .addRequired("eraStyle")
-                .addRequired("keywords")
-                .addRequired("transcript")
-                .addRequired("energyLevel")
+    private ObjectNode buildAdAnalysisSchema() {
+        return GeminiSchemas.object()
+                .prop("categories", GeminiSchemas.stringArray())
+                .prop("tone", GeminiSchemas.string())
+                .prop("eraStyle", GeminiSchemas.string())
+                .prop("keywords", GeminiSchemas.stringArray())
+                .prop("transcript", GeminiSchemas.string())
+                .prop("brandName", GeminiSchemas.string())
+                .prop("energyLevel", GeminiSchemas.integer())
+                .require("categories", "tone", "eraStyle", "keywords", "transcript", "energyLevel")
                 .build();
     }
 
@@ -242,7 +193,7 @@ public class AdAnalysisService {
     }
 
     private AdAnalysisResult parseAdAnalysisResponse(String responseText) throws IOException {
-        // Vertex AI returns the JSON directly when using structured output
+        // Gemini returns the JSON directly when structured output is in use
         JsonNode structured = objectMapper.readTree(responseText);
 
         // Parse categories
